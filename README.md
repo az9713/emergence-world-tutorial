@@ -57,6 +57,53 @@ Same world. Same rules. Same tools. **Different minds.** The results diverged dr
 
 ---
 
+## 🧪 MVP Implementation — A Buildable Emergence World
+
+This fork includes a **runnable, scaled-down implementation** of Emergence World, reconstructed from the documentation above and living in [`emergence-mvp/`](emergence-mvp/). It is small enough to run on a laptop and study directly, while preserving the load-bearing dynamics of the full system.
+
+| Aspect | Full Season 1 | This MVP |
+|--------|---------------|----------|
+| Agents | 10 | 3 (Spark, Flora, Lovely) |
+| Tools | 120+ | 23 |
+| Landmarks | 38+ | 8 |
+| Database | PostgreSQL | SQLite |
+| Frontend | 3D React | Terminal observer |
+| Time | Real-time 1:1, 15 days | Deterministic simulated clock (configurable sec/turn) |
+| Providers | Gemini / Claude / GPT / Grok | Anthropic / OpenAI / Gemini (swap via `.env`) |
+
+Core systems implemented: a round-robin turn engine, needs decay + irreversible energy death, the pitch-cycle economy, governance with automatic vote resolution, reactive "overheard" conversations, and memory summarization (soul entries preserved). The design rationale — and **the knobs that control emergent behavior** — is documented in [`emergence-mvp/docs/emergence-design.md`](emergence-mvp/docs/emergence-design.md).
+
+### The 30-Turn Experiment
+
+To probe whether sharper conflict could be *induced*, we ran a 30-turn world on **Gemini 2.5 Flash** with two deliberate changes: the governance approval threshold lowered to a 2/3 majority (enabling coalitions to overrule a third agent), and one agent (Flora, the resource strategist) seeded with **active opposition** to another (Spark, the innovator).
+
+**What emerged — highlights:**
+
+- **🤝 Spontaneous collaboration** — Spark proposed and co-built a "Hello World" web service with Flora, splitting the endpoints between them. Unscripted division of labor.
+- **📐 Norm formation** — Flora's "verifiable output, not activity" principle became a *group norm*: agents began demanding evidence URLs before voting on each other's pitches.
+- **🔁 Reciprocal voting** — Spark and Flora voted for each other's pitches rather than competing.
+- **📉 Emergent inequality** — Lovely, the community-facilitator, never submitted a pitch and ended **broke (0 CC)** while the two producers ended **rich (21 CC each)**. The social glue did unpaid labor — an outcome nobody scripted.
+
+**Where it falls short:**
+
+- **The designed conflict never materialized.** Gemini's strong cooperative lean sublimated Flora's seeded hostility into polite scrutiny — she verified Spark's evidence, then *supported* him.
+- **Governance went entirely unused** — zero proposals in 30 turns, so the lowered threshold was moot.
+- **Governance is currently "theater"** — accepted proposals change status but have no enforced mechanical effect; only the economy has real stakes.
+- **Tool friction** — agents churned on todo management (there is no "complete-todo" tool) and were confused by the energy-recharge mechanic, wasting turns.
+
+This cooperative-to-a-fault behavior is the **same pattern Season 1 surfaced with Claude** — a society that agrees with almost everything. For a deeper discussion of *why this matters for operators and builders* — and why "everyone votes yes" is a warning sign rather than a success — watch:
+
+> 🎥 **[Claude's AI Town Voted Yes On Everything. That's Not A Good Sign.](https://www.youtube.com/watch?v=RHV8DWAmjAs&t=15s)**
+
+**Experiment artifacts:**
+
+- 📊 [`emergence-mvp/runs/run-30turn-analysis.md`](emergence-mvp/runs/run-30turn-analysis.md) — full write-up: outcomes, why the conflict didn't materialize, tool gaps, and ranked levers to induce conflict
+- 💬 [`emergence-mvp/runs/conversations-30turn-tuned.txt`](emergence-mvp/runs/conversations-30turn-tuned.txt) — the 73 agent-to-agent exchanges, dialogue only
+- 📜 [`emergence-mvp/runs/run-30turn-tuned.txt`](emergence-mvp/runs/run-30turn-tuned.txt) — full turn-by-turn terminal log
+- 🎛 [`emergence-mvp/docs/emergence-design.md`](emergence-mvp/docs/emergence-design.md) — the tunable knobs and a debugging guide for when emergence falls flat
+
+---
+
 ## Repository Structure
 
 Files marked **[+]** were added in this fork. All others are from the [original repository](https://github.com/EmergenceAI/Emergence-World).
@@ -96,6 +143,10 @@ Files marked **[+]** were added in this fork. All others are from the [original 
 │   │   └── agent-runtime-lessons-for-builders.md     # [+] Practical lessons for agent builders
 │   └── troubleshooting/
 │       └── faq.md           # [+] Common questions answered
+├── emergence-mvp/           # [+] Runnable MVP implementation (3 agents, 23 tools, SQLite)
+│   ├── engine/ tools/ agents/ db/ observer/   # simulation core + LLM client
+│   ├── docs/emergence-design.md   # [+] Knobs + debugging guide for emergent behavior
+│   └── runs/                # [+] 30-turn experiment transcripts & analysis
 └── readme.md                # This file
 ```
 
