@@ -59,6 +59,8 @@ Same world. Same rules. Same tools. **Different minds.** The results diverged dr
 
 ## Repository Structure
 
+Files marked **[+]** were added in this fork. All others are from the [original repository](https://github.com/EmergenceAI/Emergence-World).
+
 ```
 ├── agent_profiles/          # Detailed profiles for all 10 agents
 ├── landmarks/               # World landmarks, buildings, and geography
@@ -70,12 +72,30 @@ Same world. Same rules. Same tools. **Different minds.** The results diverged dr
 │   └── agent_manifesto.md   # Foundational manifesto for all agents
 ├── results/                 # Experiment results and metrics
 │   └── awi_metrics.md       # AWI metric definitions and Season 1 data
-├── docs/                    # Architecture, orchestration, and technical deep-dives
+├── docs/
+│   │
+│   │   ── Original docs ──────────────────────────────────────────
 │   ├── ARCHITECTURE.md      # System architecture & tech stack
 │   ├── ORCHESTRATION.md     # Simulation loop, turns, and scheduling
 │   ├── MEMORY.md            # Agent memory & cognition system
 │   ├── ECONOMY.md           # ComputeCredits economy
-│   └── GOVERNANCE.md        # Constitution & self-governance
+│   ├── GOVERNANCE.md        # Constitution & self-governance
+│   │
+│   │   ── Added in this fork [+] ───────────────────────────────
+│   ├── index.md             # [+] Navigation hub for all docs
+│   ├── overview/
+│   │   ├── what-is-this.md  # [+] Mental model & architecture overview
+│   │   └── key-concepts.md  # [+] Glossary of every important term
+│   ├── getting-started/
+│   │   └── onboarding.md    # [+] Zero-to-hero orientation for newcomers
+│   ├── research/
+│   │   ├── season-1-findings.md            # [+] Cross-world AWI results & observations
+│   │   └── reverse-engineering-analysis.md # [+] What can be rebuilt from the docs & gaps
+│   ├── commentary/
+│   │   ├── video-transcript-what-ai-towns-reveal.md  # [+] Cleaned-up video transcript
+│   │   └── agent-runtime-lessons-for-builders.md     # [+] Practical lessons for agent builders
+│   └── troubleshooting/
+│       └── faq.md           # [+] Common questions answered
 └── readme.md                # This file
 ```
 
