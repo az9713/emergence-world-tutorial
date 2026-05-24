@@ -53,8 +53,13 @@ def run_simulation(num_turns, db=None, turn_runner=None, sleep=True):
         db.commit()
         turn_number = db.execute("SELECT turn_number FROM simulation_state WHERE id=1").fetchone()["turn_number"]
 
-        agent = db.execute("SELECT id,name,location_id,credits FROM agents WHERE id=?", (agent_id,)).fetchone()
+        agent = db.execute(
+            "SELECT id,name,location_id,credits,provider,model FROM agents WHERE id=?",
+            (agent_id,),
+        ).fetchone()
         agent_name = agent["name"]
+        agent_provider = agent["provider"]  # None -> global default
+        agent_model = agent["model"]        # None -> provider default
 
         # STEP 1: needs + death (on the simulated clock)
         needs = update_agent_needs(agent_id, db)
@@ -76,7 +81,8 @@ def run_simulation(num_turns, db=None, turn_runner=None, sleep=True):
             return registry.execute_tool(_aid, tool_name, inputs, db, _tn, "regular")
 
         t0 = time.time()
-        result = turn_runner(prompt, schemas, execute_fn, max_calls=TURN_TOOL_LIMIT)
+        result = turn_runner(prompt, schemas, execute_fn, max_calls=TURN_TOOL_LIMIT,
+                             provider=agent_provider, model=agent_model)
         elapsed = time.time() - t0
 
         # STEP 4: observer
@@ -91,6 +97,7 @@ def run_simulation(num_turns, db=None, turn_runner=None, sleep=True):
         terminal.print_turn(
             turn_number, day, sim_hour, agent_name, location, needs, credits,
             result.get("tool_calls", []), result.get("final_text", ""), elapsed,
+            model_label=(agent_model or agent_provider),
         )
         if result.get("error"):
             terminal.print_event(f"LLM error for {agent_name}: {result['error']}", kind="death")

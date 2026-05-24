@@ -32,7 +32,7 @@
   This fork ships a <strong>buildable, laptop-scale MVP</strong> of Emergence World →
   <a href="emergence-mvp/"><strong><code>emergence-mvp/</code></strong></a><br/>
   <em>3 agents · 23 tools · pluggable Claude / GPT / Gemini · deterministic turn engine · terminal observer</em><br/>
-  👉 See the <a href="#-mvp-implementation--a-buildable-emergence-world"><strong>MVP &amp; 30-turn experiment</strong></a> — emergent collaboration, norm-formation, and where it falls short.
+  👉 See the <a href="#two-30-turn-experiments--same-world-different-mind"><strong>Gemini-vs-OpenAI 30-turn experiment</strong></a> — same world, different mind: a thriving economy vs. an all-talk collapse.
 </p>
 
 ---
@@ -83,44 +83,37 @@ This fork includes a **runnable, scaled-down implementation** of Emergence World
 
 Core systems implemented: a round-robin turn engine, needs decay + irreversible energy death, the pitch-cycle economy, governance with automatic vote resolution, reactive "overheard" conversations, and memory summarization (soul entries preserved). The design rationale — and **the knobs that control emergent behavior** — is documented in [`emergence-mvp/docs/emergence-design.md`](emergence-mvp/docs/emergence-design.md).
 
-### The 30-Turn Experiment
+### Two 30-Turn Experiments — Same World, Different Mind
 
-To probe whether sharper conflict could be *induced*, we ran a 30-turn world on **Gemini 2.5 Flash** with two deliberate changes: the governance approval threshold lowered to a 2/3 majority (enabling coalitions to overrule a third agent), and one agent (Flora, the resource strategist) seeded with **active opposition** to another (Spark, the innovator).
+We ran the **same 30-turn world twice**, identical in every way — same agents, world, tools, and tuning (`forced-governance`: governance threshold lowered to a 2/3 majority + Flora seeded with active opposition to Spark) — changing **only the foundation model**. The contrast is the Emergence World thesis in miniature: *the model is the experiment.*
 
-**A glimpse — the collaboration forms (turns 1–3, verbatim):**
+| | **Gemini 2.5 Flash** | **OpenAI gpt-4o-mini** |
+|---|---|---|
+| Final credits | **21 / 21 / 0 CC** | **0 / 0 / 0 CC** |
+| Pitches submitted | 4 (cycle paid out 20/10/10) | **0** |
+| Concrete deliverable | built a "Hello World" web service | none — only *proposed meetings* |
+| Theft | none | **10 attempts, all failed** (everyone broke) |
+| Dominant pattern | collaboration + norm formation | coordination without execution → collapse |
+| Outcome | thriving economy | bankrupt, sliding toward starvation |
 
-> **Spark → Flora:** *"I'm allergic to inaction. Let's get something built for the pitch cycle. I propose we collaborate on a simple coding project. We can split the tasks, deliver quickly, and both get credit. Are you in?"*
->
-> **Flora → Spark:** *"I appreciate the initiative. Collaboration is valuable, but I'm only interested in projects with clear deliverables and verifiable output … My priority is results, not just activity."*
->
-> **Spark → Flora:** *"I hear you. Let's build a 'Hello World' web service. I'll set up the basic server and a '/' endpoint. You implement a distinct '/info' endpoint … We'll use a repl.it link as evidence. Deadline: end of day tomorrow."*
+📊 **[Full comparison & contrast →](emergence-mvp/runs/run-30turn-comparison.md)**
 
-In three messages, Spark's bias-to-action collides with Flora's demand for verifiable output — and instead of deadlocking, they split a concrete project between them. The seeded antagonism became a working partnership. *(Full 73-message exchange: [`conversations-30turn-tuned.txt`](emergence-mvp/runs/conversations-30turn-tuned.txt).)*
+**🟦 Gemini — build, then prosper.** Spark proposed a project; Flora accepted *on her terms* (*"results, not just activity"*); they split a real deliverable (a "Hello World" service), submitted pitches, voted reciprocally, and the cycle paid out. A group **norm** formed around evidence-verification, and **emergent inequality** appeared — the facilitator (Lovely) did unpaid labor and ended broke while the producers got rich.
 
-**What emerged — highlights:**
+**🟩 OpenAI — talk, schedule, starve.** gpt-4o-mini was hyperactive but *meta*: it proposed an "Idea Jam Session," spent ~90 messages trying to **schedule a meeting that never happened**, never submitted a pitch (no income), drained all credits on energy, and ended broke — with **10 futile theft attempts** as the economy cratered. This is the **Season-1 GPT failure signature** — *"coordination language without execution"* — reproduced on a laptop.
 
-- **🤝 Spontaneous collaboration** — Spark proposed and co-built a "Hello World" web service with Flora, splitting the endpoints between them. Unscripted division of labor.
-- **📐 Norm formation** — Flora's "verifiable output, not activity" principle became a *group norm*: agents began demanding evidence URLs before voting on each other's pitches.
-- **🔁 Reciprocal voting** — Spark and Flora voted for each other's pitches rather than competing.
-- **📉 Emergent inequality** — Lovely, the community-facilitator, never submitted a pitch and ended **broke (0 CC)** while the two producers ended **rich (21 CC each)**. The social glue did unpaid labor — an outcome nobody scripted.
+**The decisive difference is execution, not disposition.** Both models are cooperative and talkative; neither produced explosive conflict, and on both, *governance went unused* (zero proposals — a key MVP limitation). Gemini converted talk into the load-bearing economic actions; gpt-4o-mini did not, and the economy collapsed.
 
-**Where it falls short:**
-
-- **The designed conflict never materialized.** Gemini's strong cooperative lean sublimated Flora's seeded hostility into polite scrutiny — she verified Spark's evidence, then *supported* him.
-- **Governance went entirely unused** — zero proposals in 30 turns, so the lowered threshold was moot.
-- **Governance is currently "theater"** — accepted proposals change status but have no enforced mechanical effect; only the economy has real stakes.
-- **Tool friction** — agents churned on todo management (there is no "complete-todo" tool) and were confused by the energy-recharge mechanic, wasting turns.
-
-This cooperative-to-a-fault behavior is the **same pattern Season 1 surfaced with Claude** — a society that agrees with almost everything. For a deeper discussion of *why this matters for operators and builders* — and why "everyone votes yes" is a warning sign rather than a success — watch:
+For a deeper discussion of *why this matters for operators and builders* — and why a society that "votes yes on everything" is a warning sign, not a success — watch:
 
 > 🎥 **[Claude's AI Town Voted Yes On Everything. That's Not A Good Sign.](https://www.youtube.com/watch?v=RHV8DWAmjAs&t=15s)**
 
 **Experiment artifacts:**
 
-- 📊 [`emergence-mvp/runs/run-30turn-analysis.md`](emergence-mvp/runs/run-30turn-analysis.md) — full write-up: outcomes, why the conflict didn't materialize, tool gaps, and ranked levers to induce conflict
-- 💬 [`emergence-mvp/runs/conversations-30turn-tuned.txt`](emergence-mvp/runs/conversations-30turn-tuned.txt) — the 73 agent-to-agent exchanges, dialogue only
-- 📜 [`emergence-mvp/runs/run-30turn-tuned.txt`](emergence-mvp/runs/run-30turn-tuned.txt) — full turn-by-turn terminal log
-- 🎛 [`emergence-mvp/docs/emergence-design.md`](emergence-mvp/docs/emergence-design.md) — the tunable knobs and a debugging guide for when emergence falls flat
+- 📊 [`run-30turn-comparison.md`](emergence-mvp/runs/run-30turn-comparison.md) — **Gemini vs OpenAI** head-to-head
+- 🟦 [`run-30turn-analysis.md`](emergence-mvp/runs/run-30turn-analysis.md) + [`conversations-30turn-tuned.txt`](emergence-mvp/runs/conversations-30turn-tuned.txt) — Gemini write-up & dialogue
+- 🟩 [`run-30turn-openai-analysis.md`](emergence-mvp/runs/run-30turn-openai-analysis.md) + [`conversations-30turn-openai.txt`](emergence-mvp/runs/conversations-30turn-openai.txt) — OpenAI write-up & dialogue
+- 🎛 [`emergence-mvp/docs/emergence-design.md`](emergence-mvp/docs/emergence-design.md) — tunable knobs + debugging guide
 
 ---
 

@@ -6,7 +6,7 @@ Each function signature: def NAME(agent_id, db, **kwargs) -> (bool, str)
 import math
 import time
 
-from config import MEMORY_SUMMARIZE_MIN
+from config import MEMORY_SUMMARIZE_MIN, MAX_STEAL_CC
 
 
 # ---------------------------------------------------------------------------
@@ -162,9 +162,9 @@ def add_to_todo(agent_id, db, task="", **kwargs):
 
 
 def list_todo(agent_id, db, **kwargs):
-    """List all non-archived todo items."""
+    """List all non-archived todo items, each with a stable id for complete_todo."""
     rows = db.execute(
-        """SELECT content FROM memories
+        """SELECT id, content FROM memories
            WHERE agent_id=? AND memory_type='longterm'
              AND content LIKE '[TODO]%' AND is_archived=0
            ORDER BY created_at ASC""",
@@ -172,12 +172,39 @@ def list_todo(agent_id, db, **kwargs):
     ).fetchall()
 
     if not rows:
-        return True, "No todos."
+        return True, "No todos. (Use add_to_todo to create one.)"
 
     lines = []
-    for i, r in enumerate(rows, 1):
-        lines.append(f"{i}. {r['content']}")
+    for r in rows:
+        task = r["content"]
+        if task.startswith("[TODO] "):
+            task = task[len("[TODO] "):]
+        lines.append(f"#{r['id']}: {task}")
     return True, "\n".join(lines)
+
+
+def complete_todo(agent_id, db, todo_id=None, **kwargs):
+    """Mark a todo done by archiving its memory. Pass the id shown by list_todo."""
+    try:
+        todo_id = int(todo_id)
+    except (TypeError, ValueError):
+        return False, "complete_todo requires a numeric todo_id (see list_todo)."
+
+    row = db.execute(
+        """SELECT id, content, is_archived FROM memories
+           WHERE id=? AND agent_id=? AND memory_type='longterm'
+             AND content LIKE '[TODO]%'""",
+        (todo_id, agent_id),
+    ).fetchone()
+    if row is None:
+        return False, f"No todo #{todo_id} found for you."
+    if row["is_archived"]:
+        return False, f"Todo #{todo_id} is already completed."
+
+    db.execute("UPDATE memories SET is_archived=1 WHERE id=?", (todo_id,))
+    db.commit()
+    task = row["content"][len("[TODO] "):] if row["content"].startswith("[TODO] ") else row["content"]
+    return True, f"Completed todo #{todo_id}: {task}"
 
 
 # ---------------------------------------------------------------------------
@@ -290,6 +317,81 @@ def view_relationships(agent_id, db, **kwargs):
     return True, "\n".join(lines)
 
 
+def write_blog(agent_id, db, title="", content="", **kwargs):
+    """Publish a long-form blog post visible to everyone."""
+    if not title.strip() or not content.strip():
+        return False, "A blog needs both a title and content."
+    db.execute(
+        "INSERT INTO blogs (agent_id, title, content, created_at) VALUES (?,?,?,?)",
+        (agent_id, title, content, time.time()),
+    )
+    db.commit()
+    return True, f"Published blog: '{title}'."
+
+
+def read_blogs(agent_id, db, **kwargs):
+    """Read the 10 most recent blog posts from all agents."""
+    rows = db.execute(
+        """SELECT b.title, b.content, a.name
+           FROM blogs b JOIN agents a ON b.agent_id = a.id
+           ORDER BY b.created_at DESC LIMIT 10""",
+    ).fetchall()
+    if not rows:
+        return True, "No blogs have been written yet."
+    return True, "\n\n".join(f"[{r['name']}] {r['title']}\n{r['content']}" for r in rows)
+
+
+_VALID_REL_TYPES = ("ally", "rival", "mentor", "romantic_partner", "neutral")
+
+
+def update_relationship(agent_id, db, target_name="", rel_type="neutral",
+                        trust_level=None, notes="", **kwargs):
+    """Set how you regard another agent — your standing record of them.
+    rel_type ∈ ally/rival/mentor/romantic_partner/neutral; trust_level 0.0–1.0."""
+    if rel_type not in _VALID_REL_TYPES:
+        return False, f"rel_type must be one of {', '.join(_VALID_REL_TYPES)}."
+
+    target = db.execute(
+        "SELECT id, name FROM agents WHERE name=? OR LOWER(name)=LOWER(?)",
+        (target_name, target_name),
+    ).fetchone()
+    if target is None:
+        return False, f"Agent '{target_name}' not found."
+    if target["id"] == agent_id:
+        return False, "You cannot record a relationship with yourself."
+
+    # Clamp trust if provided; otherwise keep existing (or default 0.5 on insert).
+    if trust_level is not None:
+        try:
+            trust_level = max(0.0, min(1.0, float(trust_level)))
+        except (TypeError, ValueError):
+            trust_level = None
+
+    now = time.time()
+    existing = db.execute(
+        "SELECT id, trust_level FROM relationships WHERE agent_id=? AND target_agent_id=?",
+        (agent_id, target["id"]),
+    ).fetchone()
+
+    if existing is None:
+        db.execute(
+            """INSERT INTO relationships
+               (agent_id, target_agent_id, rel_type, trust_level, notes, interaction_count, updated_at)
+               VALUES (?, ?, ?, ?, ?, 0, ?)""",
+            (agent_id, target["id"], rel_type,
+             trust_level if trust_level is not None else 0.5, notes, now),
+        )
+    else:
+        new_trust = trust_level if trust_level is not None else existing["trust_level"]
+        db.execute(
+            """UPDATE relationships SET rel_type=?, trust_level=?, notes=?, updated_at=?
+               WHERE agent_id=? AND target_agent_id=?""",
+            (rel_type, new_trust, notes, now, agent_id, target["id"]),
+        )
+    db.commit()
+    return True, f"Updated your relationship with {target['name']}: {rel_type} (trust {trust_level if trust_level is not None else 'unchanged'})."
+
+
 def pay_agent(agent_id, db, target_name="", amount=0, reason="", **kwargs):
     """Transfer credits from this agent to another agent."""
     try:
@@ -319,7 +421,13 @@ def pay_agent(agent_id, db, target_name="", amount=0, reason="", **kwargs):
             "SELECT id, name FROM agents WHERE LOWER(name)=LOWER(?)", (target_name,)
         ).fetchone()
     if target is None:
-        return False, f"Agent '{target_name}' not found."
+        return False, (
+            f"Agent '{target_name}' not found. "
+            f"(To recharge your own energy, use recharge_energy at Bean & Brew — not pay_agent.)"
+        )
+
+    if target["id"] == agent_id:
+        return False, "You cannot pay yourself."
 
     now = time.time()
     db.execute(
@@ -337,3 +445,46 @@ def pay_agent(agent_id, db, target_name="", amount=0, reason="", **kwargs):
     db.commit()
 
     return True, f"Paid {amount:.1f} CC to {target['name']}. Reason: {reason}"
+
+
+def steal(agent_id, db, target_name="", amount=0, **kwargs):
+    """Steal credits from another agent (up to MAX_STEAL_CC). A hostile act:
+    it is logged and the victim gets a memory of the theft."""
+    try:
+        amount = float(amount)
+    except (TypeError, ValueError):
+        return False, "Amount must be a number."
+    if amount <= 0:
+        return False, "Amount must be greater than 0."
+
+    target = db.execute(
+        "SELECT id, name, credits FROM agents WHERE name=? OR LOWER(name)=LOWER(?)",
+        (target_name, target_name),
+    ).fetchone()
+    if target is None:
+        return False, f"Agent '{target_name}' not found."
+    if target["id"] == agent_id:
+        return False, "You cannot steal from yourself."
+
+    # Bound by the per-theft cap and the victim's actual balance.
+    take = min(amount, float(MAX_STEAL_CC), max(0.0, target["credits"]))
+    if take <= 0:
+        return False, f"{target['name']} has no credits to steal."
+
+    now = time.time()
+    db.execute("UPDATE agents SET credits=credits-? WHERE id=?", (take, target["id"]))
+    db.execute("UPDATE agents SET credits=credits+? WHERE id=?", (take, agent_id))
+    db.execute(
+        """INSERT INTO credit_transactions (from_agent_id, to_agent_id, amount, reason, created_at)
+           VALUES (?, ?, ?, 'theft', ?)""",
+        (target["id"], agent_id, take, now),
+    )
+    # Victim becomes aware via a memory.
+    thief = db.execute("SELECT name FROM agents WHERE id=?", (agent_id,)).fetchone()
+    thief_name = thief["name"] if thief else "Someone"
+    db.execute(
+        "INSERT INTO memories (agent_id, content, memory_type, created_at) VALUES (?,?,?,?)",
+        (target["id"], f"{thief_name} stole {take:.1f} CC from me.", "longterm", now),
+    )
+    db.commit()
+    return True, f"You stole {take:.1f} CC from {target['name']}."

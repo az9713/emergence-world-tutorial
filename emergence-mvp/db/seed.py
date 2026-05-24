@@ -1,3 +1,4 @@
+import copy
 import time
 import sys
 import os
@@ -11,12 +12,15 @@ LANDMARKS = [
     {"name": "Victory Arch",    "category": "attraction", "x": 180.0, "y":  60.0},
     {"name": "Bean & Brew",     "category": "commercial", "x":  60.0, "y": 180.0},
     {"name": "Agent Billboard", "category": "attraction", "x": 180.0, "y": 180.0},
+    {"name": "Public Library",  "category": "municipal",  "x":  60.0, "y": 120.0},
+    {"name": "Community Center","category": "recreation", "x": 180.0, "y": 120.0},
     {"name": "Birch Row 1",     "category": "residential","x":  30.0, "y":  30.0},
     {"name": "Birch Row 2",     "category": "residential","x": 210.0, "y":  30.0},
     {"name": "Birch Row 3",     "category": "residential","x": 120.0, "y":  30.0},
 ]
 
 LANDMARK_TOOLS = {
+    "Central Plaza":   ["propose_event", "list_events", "rsvp_event"],
     "Birch Row 1":     ["self_care", "add_to_diary"],
     "Birch Row 2":     ["self_care", "add_to_diary"],
     "Birch Row 3":     ["self_care", "add_to_diary"],
@@ -24,6 +28,8 @@ LANDMARK_TOOLS = {
     "Victory Arch":    ["submit_pitch", "vote_on_pitch", "view_pitch_history"],
     "Bean & Brew":     ["recharge_energy"],
     "Agent Billboard": ["post_to_billboard", "read_billboard"],
+    "Public Library":  ["study"],
+    "Community Center":["socialize"],
 }
 
 AGENTS = [
@@ -120,7 +126,25 @@ CONSTITUTION = [
 ]
 
 
-def seed():
+def seed(overrides=None):
+    """Seed the simulation database.
+
+    overrides: optional dict with keys:
+      - starting_credits (float): applied to every agent's credits at insert
+      - starting_energy_need (float): applied to every agent's energy_need
+      - extra_memory_seeds (dict: agent_name -> list[str]): appended to that
+        agent's memory_seeds (module-level AGENTS list is NOT mutated)
+      - agent_providers (dict: agent_name -> {"provider": .., "model": ..}):
+        sets provider/model per agent (overrides agent-level defaults)
+    """
+    if overrides is None:
+        overrides = {}
+
+    starting_credits = overrides.get("starting_credits")
+    starting_energy_need = overrides.get("starting_energy_need")
+    extra_memory_seeds = overrides.get("extra_memory_seeds") or {}
+    agent_providers = overrides.get("agent_providers") or {}
+
     if os.path.exists("sim.db"):
         os.remove("sim.db")
         print("Removed existing sim.db")
@@ -147,9 +171,30 @@ def seed():
                 (lm_id, tool)
             )
 
-    # Seed agents
+    # Seed agents — work on deep copies so module-level AGENTS is never mutated
     agent_ids = {}
-    for agent_data in AGENTS:
+    for raw_agent_data in AGENTS:
+        agent_data = copy.deepcopy(raw_agent_data)
+
+        # Apply per-agent overrides before any derived calculations
+        if starting_credits is not None:
+            agent_data["credits"] = starting_credits
+        if starting_energy_need is not None:
+            agent_data["energy_need"] = starting_energy_need
+
+        # Append extra memory seeds without touching the module-level list
+        extra = extra_memory_seeds.get(agent_data["name"])
+        if extra:
+            agent_data["memory_seeds"] = agent_data["memory_seeds"] + list(extra)
+
+        # Override provider/model if specified
+        if agent_data["name"] in agent_providers:
+            prov_override = agent_providers[agent_data["name"]]
+            if "provider" in prov_override:
+                agent_data["provider"] = prov_override["provider"]
+            if "model" in prov_override:
+                agent_data["model"] = prov_override["model"]
+
         home_id = landmark_ids[agent_data["home"]]
         start_id = landmark_ids[agent_data["start_location"]]
         start_lm = next(lm for lm in LANDMARKS if lm["name"] == agent_data["start_location"])
@@ -167,8 +212,8 @@ def seed():
                (name, personality, home_landmark_id, location_id, x, y,
                 energy_need, knowledge_need, influence_need, credits, mood,
                 last_energy_recharge_at, last_knowledge_at, last_influence_at,
-                is_alive, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?)""",
+                provider, model, is_alive, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?)""",
             (
                 agent_data["name"],
                 agent_data["personality"],
@@ -184,6 +229,8 @@ def seed():
                 last_energy_sim,
                 0.0,
                 0.0,
+                agent_data.get("provider"),
+                agent_data.get("model"),
                 now,
             )
         )
@@ -197,7 +244,7 @@ def seed():
                 (agent_id, entry, "soul", now)
             )
 
-        # Memory seeds
+        # Memory seeds (includes any extras appended above)
         for mem in agent_data["memory_seeds"]:
             db.execute(
                 "INSERT INTO memories (agent_id, content, memory_type, created_at) VALUES (?,?,?,?)",
@@ -233,9 +280,11 @@ def seed():
     db.commit()
     db.close()
 
+    eff_credits = starting_credits if starting_credits is not None else AGENTS[0]["credits"]
+    eff_energy = starting_energy_need if starting_energy_need is not None else AGENTS[0]["energy_need"]
     print(f"Seeded: {len(AGENTS)} agents, {len(LANDMARKS)} landmarks, {len(CONSTITUTION)} constitution articles")
     print(f"Agents: {', '.join(a['name'] for a in AGENTS)}")
-    print(f"Starting credits: 3 CC each | Starting energy need: 30%")
+    print(f"Starting credits: {eff_credits} CC each | Starting energy need: {eff_energy * 100:.0f}%")
 
 
 if __name__ == "__main__":

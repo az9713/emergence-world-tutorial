@@ -6,8 +6,10 @@ The registry enforces location gating before calling these functions.
 
 import math
 import time
+import json
 
-from config import RECHARGE_COST_CC, GOVERNANCE_THRESHOLD, MEMORY_SUMMARIZE_MIN
+import config
+from config import RECHARGE_COST_CC, MEMORY_SUMMARIZE_MIN
 
 
 # ---------------------------------------------------------------------------
@@ -15,11 +17,13 @@ from config import RECHARGE_COST_CC, GOVERNANCE_THRESHOLD, MEMORY_SUMMARIZE_MIN
 # ---------------------------------------------------------------------------
 
 def proposal_threshold(db):
-    """Return (live_count, threshold_needed) for current agent population."""
+    """Return (live_count, threshold_needed) for current agent population.
+    Reads GOVERNANCE_THRESHOLD from config at call time so scenario presets
+    that override it (via setattr on config) take effect."""
     live_count = db.execute(
         "SELECT COUNT(*) FROM agents WHERE is_alive=1"
     ).fetchone()[0]
-    threshold_needed = math.ceil(live_count * GOVERNANCE_THRESHOLD)
+    threshold_needed = math.ceil(live_count * config.GOVERNANCE_THRESHOLD)
     return live_count, threshold_needed
 
 
@@ -59,6 +63,9 @@ def _resolve_proposal(proposal_id, db, now=None):
             (now, proposal_id),
         )
         db.commit()
+        # Execute the proposal's structured effect (constitution / remove_agent), if any.
+        from engine.governance import apply_proposal_effect
+        apply_proposal_effect(proposal_id, db)
         return "ACCEPTED"
     elif votes_for + remaining < threshold_needed:
         db.execute(
@@ -111,6 +118,68 @@ def recharge_energy(agent_id, db, **kwargs):
     return True, f"Energy recharged to full. Paid {cost} CC."
 
 
+def propose_event(agent_id, db, title="", description="", **kwargs):
+    """Propose a community event (hosted at Central Plaza)."""
+    if not title.strip():
+        return False, "An event needs a title."
+    loc = db.execute("SELECT location_id FROM agents WHERE id=?", (agent_id,)).fetchone()
+    now = time.time()
+    cur = db.execute(
+        """INSERT INTO events (host_id, title, description, location_id, sim_time, created_at)
+           VALUES (?,?,?,?,?,?)""",
+        (agent_id, title, description, loc["location_id"] if loc else None, None, now),
+    )
+    db.commit()
+    return True, f"Event #{cur.lastrowid} proposed: '{title}'. Others can rsvp_event to join."
+
+
+def list_events(agent_id, db, **kwargs):
+    """List events and their RSVP counts."""
+    rows = db.execute(
+        """SELECT e.id, e.title, a.name AS host,
+                  (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id=e.id) AS rsvps
+           FROM events e JOIN agents a ON e.host_id = a.id
+           ORDER BY e.created_at DESC LIMIT 10""",
+    ).fetchall()
+    if not rows:
+        return True, "No events have been proposed yet."
+    return True, "\n".join(f"#{r['id']} \"{r['title']}\" (host {r['host']}, {r['rsvps']} RSVPs)" for r in rows)
+
+
+def rsvp_event(agent_id, db, event_id=None, **kwargs):
+    """RSVP to a proposed event."""
+    try:
+        event_id = int(event_id)
+    except (TypeError, ValueError):
+        return False, "rsvp_event requires a numeric event_id (see list_events)."
+    ev = db.execute("SELECT id, title FROM events WHERE id=?", (event_id,)).fetchone()
+    if ev is None:
+        return False, f"No event #{event_id}."
+    try:
+        db.execute(
+            "INSERT INTO event_rsvps (event_id, agent_id, created_at) VALUES (?,?,?)",
+            (event_id, agent_id, time.time()),
+        )
+        db.commit()
+    except Exception:
+        return False, f"You already RSVP'd to event #{event_id}."
+    return True, f"RSVP recorded for event #{event_id}: '{ev['title']}'."
+
+
+def study(agent_id, db, **kwargs):
+    """Study at the Public Library to clear your Knowledge need (free)."""
+    from engine.needs import knowledge_recharge_reset
+    knowledge_recharge_reset(agent_id, db)
+    return True, "You study at the Public Library. Knowledge need cleared."
+
+
+def socialize(agent_id, db, **kwargs):
+    """Socialize at the Community Center to clear your Influence need (free)."""
+    from engine.needs import influence_recharge_reset
+    influence_recharge_reset(agent_id, db)
+    return True, "You socialize at the Community Center. Influence need cleared."
+
+
 def self_care(agent_id, db, **kwargs):
     """Rest at home and reflect. Summarizes memories if above threshold."""
     # Count non-archived longterm memories (exclude soul and diary)
@@ -147,17 +216,36 @@ def add_to_diary(agent_id, db, content="", **kwargs):
     return True, "Diary entry recorded."
 
 
-def submit_proposal(agent_id, db, title="", description="", category="others", **kwargs):
-    """Submit a governance proposal at Town Hall with an implicit 'for' vote."""
+def submit_proposal(agent_id, db, title="", description="", category="others",
+                    effect_type="none", effect_payload=None, **kwargs):
+    """Submit a governance proposal at Town Hall with an implicit 'for' vote.
+
+    Optional structured effect (executed automatically if the proposal is ACCEPTED):
+      effect_type ∈ {none, amend_constitution, add_constitution_article, remove_agent}
+      effect_payload: a JSON object (or JSON string) with the effect's parameters.
+    """
     valid_categories = ("constitution", "resource", "infrastructure", "others")
     if category not in valid_categories:
         category = "others"
 
+    valid_effects = ("none", "amend_constitution", "add_constitution_article", "remove_agent")
+    if effect_type not in valid_effects:
+        effect_type = "none"
+
+    # Normalize payload to a JSON string for storage.
+    if effect_payload is None:
+        payload_str = None
+    elif isinstance(effect_payload, str):
+        payload_str = effect_payload
+    else:
+        payload_str = json.dumps(effect_payload)
+
     now = time.time()
     cur = db.execute(
-        """INSERT INTO proposals (proposer_id, title, description, category, status, created_at)
-           VALUES (?, ?, ?, ?, 'ACTIVE', ?)""",
-        (agent_id, title, description, category, now),
+        """INSERT INTO proposals (proposer_id, title, description, category, status,
+                                  effect_type, effect_payload, created_at)
+           VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?, ?)""",
+        (agent_id, title, description, category, effect_type, payload_str, now),
     )
     proposal_id = cur.lastrowid
 

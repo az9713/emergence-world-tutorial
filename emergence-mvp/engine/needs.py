@@ -163,3 +163,27 @@ def recharge_energy_reset(agent_id, db, now=None):
         (now, agent_id),
     )
     db.commit()
+
+
+def knowledge_recharge_reset(agent_id, db, now=None):
+    """Reset knowledge: set last_knowledge_at=now, knowledge_need=0.0. Commits.
+    Used by the `study` tool (Public Library). No death timer for knowledge."""
+    if now is None:
+        now = sim_now(db)
+    db.execute(
+        "UPDATE agents SET last_knowledge_at=?, knowledge_need=0.0 WHERE id=?",
+        (now, agent_id),
+    )
+    db.commit()
+
+
+def influence_recharge_reset(agent_id, db, now=None):
+    """Reset influence: set last_influence_at=now, influence_need=0.0. Commits.
+    Used by the `socialize` tool (Community Center). No death timer for influence."""
+    if now is None:
+        now = sim_now(db)
+    db.execute(
+        "UPDATE agents SET last_influence_at=?, influence_need=0.0 WHERE id=?",
+        (now, agent_id),
+    )
+    db.commit()

@@ -1,5 +1,5 @@
 import time
-from config import PITCH_REWARD_FIRST, PITCH_REWARD_SECOND, PITCH_REWARD_THIRD
+import config
 from engine.clock import current_day
 
 
@@ -33,7 +33,7 @@ def settle_cycle(cycle_number, db, observer=None):
     ).fetchall()
     if not pitches:
         return []
-    rewards = [PITCH_REWARD_FIRST, PITCH_REWARD_SECOND, PITCH_REWARD_THIRD]
+    rewards = [config.PITCH_REWARD_FIRST, config.PITCH_REWARD_SECOND, config.PITCH_REWARD_THIRD]
     results = []
     now = time.time()
     for rank, pitch in enumerate(pitches[:3], start=1):

@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r emergence-mvp/requirements.txt
+
+      - name: Test needs engine
+        working-directory: emergence-mvp
+        run: python tests/test_needs.py
+
+      - name: Test tools
+        working-directory: emergence-mvp
+        run: python tests/test_tools.py
+
+      - name: Test turn engine
+        working-directory: emergence-mvp
+        run: python tests/test_turn_engine.py
+
+      - name: Test reactive memory
+        working-directory: emergence-mvp
+        run: python tests/test_reactive_memory.py
+
+      - name: Test governance
+        working-directory: emergence-mvp
+        run: python tests/test_governance.py
+
+      - name: Test AWI
+        working-directory: emergence-mvp
+        run: python tests/test_awi.py

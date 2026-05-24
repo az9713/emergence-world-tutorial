@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS agents (
     last_influence_at REAL,
     is_alive INTEGER NOT NULL DEFAULT 1,
     death_energy_zero_since REAL,
+    provider TEXT,
+    model TEXT,
     created_at REAL NOT NULL
 );
 
@@ -79,6 +81,8 @@ CREATE TABLE IF NOT EXISTS proposals (
     description TEXT NOT NULL,
     category TEXT NOT NULL DEFAULT 'others',
     status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE','ACCEPTED','REJECTED','AWAITING_CLARIFICATION')),
+    effect_type TEXT NOT NULL DEFAULT 'none',
+    effect_payload TEXT,
     created_at REAL NOT NULL,
     resolved_at REAL
 );
@@ -144,6 +148,32 @@ CREATE TABLE IF NOT EXISTS billboard_posts (
     agent_id INTEGER NOT NULL REFERENCES agents(id),
     content TEXT NOT NULL,
     created_at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS blogs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_id INTEGER NOT NULL REFERENCES agents(id),
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    host_id INTEGER NOT NULL REFERENCES agents(id),
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    location_id INTEGER REFERENCES landmarks(id),
+    sim_time REAL,
+    created_at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS event_rsvps (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id INTEGER NOT NULL REFERENCES events(id),
+    agent_id INTEGER NOT NULL REFERENCES agents(id),
+    created_at REAL NOT NULL,
+    UNIQUE(event_id, agent_id)
 );
 
 CREATE TABLE IF NOT EXISTS simulation_state (

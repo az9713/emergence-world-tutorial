@@ -61,6 +61,7 @@ def print_turn(
     tool_calls,
     final_text,
     elapsed_s,
+    model_label=None,
 ):
     """Render one agent turn as a rich terminal block."""
     console.print(Rule(
@@ -68,7 +69,8 @@ def print_turn(
         style="bold white",
     ))
 
-    console.print(f"[bold cyan]  \U0001f916 {agent_name}[/bold cyan]  @  [yellow]{location}[/yellow]")
+    model_suffix = f"  [dim]({model_label})[/dim]" if model_label else ""
+    console.print(f"[bold cyan]  \U0001f916 {agent_name}[/bold cyan]  @  [yellow]{location}[/yellow]{model_suffix}")
 
     # Needs line — colour energy based on urgency
     energy = needs.get("energy", 0.0)
@@ -212,5 +214,17 @@ def print_summary(db):
         for p in proposals:
             ptable.add_row(p["title"], p["status"])
         console.print(ptable)
+
+    # Agent World Indicators
+    from engine.awi import compute_awi, format_awi
+    try:
+        awi = compute_awi(db)
+        awi_text = format_awi(awi)
+        console.print()
+        console.print(Rule("AGENT WORLD INDICATORS", style="bold blue"))
+        for line in awi_text.splitlines():
+            console.print(f"  [cyan]{line}[/cyan]")
+    except Exception as exc:  # pragma: no cover
+        console.print(f"[yellow]  (AWI unavailable: {exc})[/yellow]")
 
     console.print(Rule(style="bold magenta"))

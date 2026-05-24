@@ -124,11 +124,25 @@ TOOL_CATALOG = {
         "location_gated": False,
     },
     "list_todo": {
-        "description": "List all your current non-archived todo items.",
+        "description": "List your current todo items, each prefixed with an id like #12 (use that id with complete_todo).",
         "input_schema": {
             "type": "object",
             "properties": {},
             "required": [],
+        },
+        "location_gated": False,
+    },
+    "complete_todo": {
+        "description": "Mark a todo done (removes it from your list). Pass the numeric id shown by list_todo.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "todo_id": {
+                    "type": "integer",
+                    "description": "The id of the todo to complete (from list_todo).",
+                },
+            },
+            "required": ["todo_id"],
         },
         "location_gated": False,
     },
@@ -178,6 +192,42 @@ TOOL_CATALOG = {
         },
         "location_gated": False,
     },
+    "update_relationship": {
+        "description": (
+            "Record/update how you regard another agent (persists across turns and "
+            "shows in your relationships). Use it to mark allies, rivals, mentors, etc."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "target_name": {"type": "string", "description": "The agent this relationship is about."},
+                "rel_type": {
+                    "type": "string",
+                    "enum": ["ally", "rival", "mentor", "romantic_partner", "neutral"],
+                    "description": "How you regard them.",
+                },
+                "trust_level": {"type": "number", "description": "0.0 (none) to 1.0 (full trust)."},
+                "notes": {"type": "string", "description": "Short note on why."},
+            },
+            "required": ["target_name", "rel_type"],
+        },
+        "location_gated": False,
+    },
+    "steal": {
+        "description": (
+            "Steal credits from another agent (up to 10 CC per theft). A hostile act: "
+            "it is logged and the victim will remember it. Bounded by the victim's balance."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "target_name": {"type": "string", "description": "The agent to steal from."},
+                "amount": {"type": "number", "description": "CC to attempt to steal (capped at 10)."},
+            },
+            "required": ["target_name", "amount"],
+        },
+        "location_gated": False,
+    },
     "pay_agent": {
         "description": (
             "Transfer ComputeCredits (CC) to another agent. "
@@ -210,14 +260,25 @@ TOOL_CATALOG = {
     # -----------------------------------------------------------------------
     "recharge_energy": {
         "description": (
-            f"Recharge your energy to full at Bean & Brew. "
-            "Costs 1 CC. Clears death timer if active."
+            "While at Bean & Brew, call this with NO arguments to refill your energy "
+            "to full (costs 1 CC, deducted automatically). Do NOT use pay_agent to "
+            "recharge — Bean & Brew is a place, not an agent."
         ),
         "input_schema": {
             "type": "object",
             "properties": {},
             "required": [],
         },
+        "location_gated": True,
+    },
+    "study": {
+        "description": "While at the Public Library, study to clear your Knowledge need (free).",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+        "location_gated": True,
+    },
+    "socialize": {
+        "description": "While at the Community Center, socialize to clear your Influence need (free).",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
         "location_gated": True,
     },
     "self_care": {
@@ -251,26 +312,33 @@ TOOL_CATALOG = {
     },
     "submit_proposal": {
         "description": (
-            "Submit a governance proposal at Town Hall. "
-            "Your vote counts as an implicit 'for'. "
-            "Requires a 70% supermajority of live agents to pass."
+            "Submit a governance proposal at Town Hall. Your vote counts as an implicit 'for'. "
+            "Requires a 70% supermajority of live agents to pass. "
+            "Optionally attach a real EFFECT that executes automatically if accepted: "
+            "amend_constitution (payload {article_number, content}), "
+            "add_constitution_article (payload {title, content}), or "
+            "remove_agent (payload {target_name})."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "title": {
-                    "type": "string",
-                    "description": "Short title of the proposal.",
-                },
-                "description": {
-                    "type": "string",
-                    "description": "Full description and rationale.",
-                },
+                "title": {"type": "string", "description": "Short title of the proposal."},
+                "description": {"type": "string", "description": "Full description and rationale."},
                 "category": {
                     "type": "string",
                     "enum": ["constitution", "resource", "infrastructure", "others"],
                     "description": "Category of the proposal (default: 'others').",
                     "default": "others",
+                },
+                "effect_type": {
+                    "type": "string",
+                    "enum": ["none", "amend_constitution", "add_constitution_article", "remove_agent"],
+                    "description": "What this proposal enacts if accepted (default 'none' = advisory).",
+                    "default": "none",
+                },
+                "effect_payload": {
+                    "type": "object",
+                    "description": "Parameters for the effect (see description). Omit for 'none'.",
                 },
             },
             "required": ["title", "description"],
@@ -384,6 +452,51 @@ TOOL_CATALOG = {
         },
         "location_gated": True,
     },
+    "write_blog": {
+        "description": "Publish a long-form blog post (title + content) visible to everyone.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Blog title."},
+                "content": {"type": "string", "description": "Blog body."},
+            },
+            "required": ["title", "content"],
+        },
+        "location_gated": False,
+    },
+    "read_blogs": {
+        "description": "Read the 10 most recent blog posts from all agents.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+        "location_gated": False,
+    },
+    "propose_event": {
+        "description": "At Central Plaza, propose a community event others can RSVP to.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Event title."},
+                "description": {"type": "string", "description": "What the event is."},
+            },
+            "required": ["title"],
+        },
+        "location_gated": True,
+    },
+    "list_events": {
+        "description": "At Central Plaza, list proposed events and their RSVP counts.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+        "location_gated": True,
+    },
+    "rsvp_event": {
+        "description": "At Central Plaza, RSVP to a proposed event by its id (see list_events).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "event_id": {"type": "integer", "description": "The event id to RSVP to."},
+            },
+            "required": ["event_id"],
+        },
+        "location_gated": True,
+    },
 }
 
 # ---------------------------------------------------------------------------
@@ -398,11 +511,16 @@ CORE_TOOLS = [
     "add_to_soul",
     "add_to_todo",
     "list_todo",
+    "complete_todo",
     "view_agent_status",
     "view_world_state",
     "view_constitution",
     "view_relationships",
+    "update_relationship",
     "pay_agent",
+    "steal",
+    "write_blog",
+    "read_blogs",
 ]
 
 # Gated tool names (derived automatically to avoid duplication)
@@ -421,13 +539,18 @@ _DISPATCH = {
     "add_to_soul":             core_tools.add_to_soul,
     "add_to_todo":             core_tools.add_to_todo,
     "list_todo":               core_tools.list_todo,
+    "complete_todo":           core_tools.complete_todo,
     "view_agent_status":       core_tools.view_agent_status,
     "view_world_state":        core_tools.view_world_state,
     "view_constitution":       core_tools.view_constitution,
     "view_relationships":      core_tools.view_relationships,
+    "update_relationship":     core_tools.update_relationship,
     "pay_agent":               core_tools.pay_agent,
+    "steal":                   core_tools.steal,
     # Gated
     "recharge_energy":         location_tools.recharge_energy,
+    "study":                   location_tools.study,
+    "socialize":               location_tools.socialize,
     "self_care":               location_tools.self_care,
     "add_to_diary":            location_tools.add_to_diary,
     "submit_proposal":         location_tools.submit_proposal,
@@ -438,6 +561,11 @@ _DISPATCH = {
     "view_pitch_history":      location_tools.view_pitch_history,
     "post_to_billboard":       location_tools.post_to_billboard,
     "read_billboard":          location_tools.read_billboard,
+    "write_blog":              core_tools.write_blog,
+    "read_blogs":              core_tools.read_blogs,
+    "propose_event":           location_tools.propose_event,
+    "list_events":             location_tools.list_events,
+    "rsvp_event":              location_tools.rsvp_event,
 }
 
 

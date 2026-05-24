@@ -2,3 +2,9 @@
 sim.db
 __pycache__/
 *.pyc
+
+# Generated run artifacts (keep curated runs/run-30turn-* and conversations-* examples)
+runs/batch-*.db
+runs/batch-summary.csv
+runs/report.md
+runs/run-20*.txt

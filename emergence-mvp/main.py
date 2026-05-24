@@ -42,10 +42,25 @@ def main():
     p.add_argument("--no-sleep", action="store_true", help="disable the real-time pause between turns")
     p.add_argument("--dry-run", action="store_true",
                    help="run with a scripted fake LLM (no API key) to smoke-test the pipeline and observer")
+    p.add_argument("--scenario", default=None,
+                   help="apply an experiment preset (see scenarios.py). Implies a fresh re-seed.")
+    p.add_argument("--log", nargs="?", const="__auto__", default=None,
+                   help="save the run transcript. Bare --log auto-names runs/run-<timestamp>.txt; "
+                        "or pass a path.")
     args = p.parse_args()
-    if args.fresh:
+
+    # Scenario presets mutate config (must happen BEFORE engine modules import).
+    seed_overrides = {}
+    if args.scenario:
+        from scenarios import apply_scenario
+        seed_overrides = apply_scenario(args.scenario)
+        print(f"Scenario: {args.scenario}")
+
+    # A scenario carries seed overrides, so it implies a fresh seed.
+    if args.fresh or args.scenario:
         from db.seed import seed
-        seed()
+        seed(seed_overrides)
+
     if args.dry_run:
         print("Provider: dry-run (scripted fake LLM, no API calls)")
         runner = _dry_run_runner()
@@ -53,8 +68,27 @@ def main():
         from agents.llm_client import active_provider_label
         print(f"Provider: {active_provider_label()}")
         runner = None
+
+    # Optional transcript logging via the observer's rich console recorder.
+    log_path = None
+    if args.log is not None:
+        from observer import terminal
+        terminal.console.record = True
+        if args.log == "__auto__":
+            import datetime
+            stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+            log_path = os.path.join("runs", f"run-{stamp}.txt")
+        else:
+            log_path = args.log
+
     from engine.turn_engine import run_simulation
     run_simulation(args.turns, turn_runner=runner, sleep=not args.no_sleep)
+
+    if log_path:
+        from observer import terminal
+        os.makedirs(os.path.dirname(log_path) or ".", exist_ok=True)
+        terminal.console.save_text(log_path)
+        print(f"Transcript saved to {log_path}")
 
 
 if __name__ == "__main__":

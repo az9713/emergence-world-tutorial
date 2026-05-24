@@ -38,16 +38,16 @@ KNOWLEDGE_DRAIN_SECONDS = 86400   # 24 hours to 100%
 INFLUENCE_DRAIN_SECONDS = 129600  # 36 hours to 100%
 DEATH_THRESHOLD_SECONDS = 172800  # 48 hours at 100% energy = death
 
-# Canonical Emergence World invariant is 0.70 (70%). Set to 0.50 for this experiment
-# so that with 3 agents a 2/3 MAJORITY passes (ceil(3*0.5)=2) — disagreement becomes
-# weaponizable via coalitions instead of requiring unanimity. Revert to 0.70 to restore
-# the canonical consensus dynamic.
-GOVERNANCE_THRESHOLD = 0.50
+# Canonical Emergence World invariant: 70% supermajority of live agents.
+# (Experiments that want coalition dynamics — e.g. 0.50 so a 2/3 majority passes —
+# should set this via a scenario preset rather than changing the baseline here.)
+GOVERNANCE_THRESHOLD = 0.70
 MEMORY_SUMMARIZE_MIN = 30
 MEMORY_BATCH_SIZE = 500
 
 BOOST_COST_CC = 1
 RECHARGE_COST_CC = 1
+MAX_STEAL_CC = 10   # cap per theft via the `steal` tool
 PITCH_REWARD_FIRST = 20
 PITCH_REWARD_SECOND = 10
 PITCH_REWARD_THIRD = 10

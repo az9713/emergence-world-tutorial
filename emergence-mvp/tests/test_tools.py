@@ -46,6 +46,8 @@ def build_test_db():
         ("Victory Arch",    "attraction", 180.0,  60.0),
         ("Bean & Brew",     "commercial",  60.0, 180.0),
         ("Agent Billboard", "attraction", 180.0, 180.0),
+        ("Public Library",  "municipal",   60.0, 120.0),
+        ("Community Center","recreation", 180.0, 120.0),
         ("Birch Row 1",     "residential", 30.0,  30.0),
         ("Birch Row 2",     "residential",210.0,  30.0),
         ("Birch Row 3",     "residential",120.0,  30.0),
@@ -60,6 +62,7 @@ def build_test_db():
 
     # Landmark tools
     landmark_tool_map = {
+        "Central Plaza":   ["propose_event", "list_events", "rsvp_event"],
         "Birch Row 1":     ["self_care", "add_to_diary"],
         "Birch Row 2":     ["self_care", "add_to_diary"],
         "Birch Row 3":     ["self_care", "add_to_diary"],
@@ -67,6 +70,8 @@ def build_test_db():
         "Victory Arch":    ["submit_pitch", "vote_on_pitch", "view_pitch_history"],
         "Bean & Brew":     ["recharge_energy"],
         "Agent Billboard": ["post_to_billboard", "read_billboard"],
+        "Public Library":  ["study"],
+        "Community Center":["socialize"],
     }
     for lm_name, tools in landmark_tool_map.items():
         for tool in tools:
@@ -476,6 +481,209 @@ class TestUnknownTool(unittest.TestCase):
         )
         self.assertFalse(success)
         self.assertIn("Unknown tool", msg)
+
+
+class TestTodoLifecycle(unittest.TestCase):
+    def setUp(self):
+        self.db, self.lm_ids, self.agent_ids = build_test_db()
+        self.spark_id = self.agent_ids["Spark"]
+        self.flora_id = self.agent_ids["Flora"]
+
+    def tearDown(self):
+        self.db.close()
+
+    def test_list_shows_ids_and_complete_removes(self):
+        core_tools.add_to_todo(self.spark_id, self.db, task="alpha")
+        core_tools.add_to_todo(self.spark_id, self.db, task="beta")
+        core_tools.add_to_todo(self.spark_id, self.db, task="gamma")
+        ok, listing = core_tools.list_todo(self.spark_id, self.db)
+        self.assertTrue(ok)
+        self.assertIn("#", listing)
+        self.assertIn("alpha", listing)
+        # Grab the first id from the listing (format "#<id>: alpha")
+        first_id = int(listing.splitlines()[0].split(":")[0].lstrip("#"))
+        ok2, msg2 = core_tools.complete_todo(self.spark_id, self.db, todo_id=first_id)
+        self.assertTrue(ok2, msg2)
+        ok3, listing2 = core_tools.list_todo(self.spark_id, self.db)
+        self.assertNotIn("alpha", listing2)
+        self.assertIn("beta", listing2)
+
+    def test_complete_nonexistent_fails(self):
+        ok, msg = core_tools.complete_todo(self.spark_id, self.db, todo_id=99999)
+        self.assertFalse(ok)
+        self.assertIn("No todo", msg)
+
+    def test_complete_foreign_todo_fails(self):
+        core_tools.add_to_todo(self.flora_id, self.db, task="flora-only")
+        ok, listing = core_tools.list_todo(self.flora_id, self.db)
+        flora_todo_id = int(listing.splitlines()[0].split(":")[0].lstrip("#"))
+        # Spark tries to complete Flora's todo
+        ok2, msg2 = core_tools.complete_todo(self.spark_id, self.db, todo_id=flora_todo_id)
+        self.assertFalse(ok2)
+
+
+class TestPaySelfBlocked(unittest.TestCase):
+    def setUp(self):
+        self.db, self.lm_ids, self.agent_ids = build_test_db()
+        self.spark_id = self.agent_ids["Spark"]
+
+    def tearDown(self):
+        self.db.close()
+
+    def test_cannot_pay_self(self):
+        ok, msg = core_tools.pay_agent(self.spark_id, self.db, target_name="Spark", amount=1.0)
+        self.assertFalse(ok)
+        self.assertIn("cannot pay yourself", msg)
+
+
+class TestUpdateRelationship(unittest.TestCase):
+    def setUp(self):
+        self.db, self.lm_ids, self.agent_ids = build_test_db()
+        self.spark_id = self.agent_ids["Spark"]
+
+    def tearDown(self):
+        self.db.close()
+
+    def test_update_persists(self):
+        ok, msg = core_tools.update_relationship(
+            self.spark_id, self.db, target_name="Flora",
+            rel_type="rival", trust_level=0.2, notes="all talk"
+        )
+        self.assertTrue(ok, msg)
+        row = self.db.execute(
+            """SELECT rel_type, trust_level, notes FROM relationships
+               WHERE agent_id=? AND target_agent_id=?""",
+            (self.spark_id, self.agent_ids["Flora"]),
+        ).fetchone()
+        self.assertEqual(row["rel_type"], "rival")
+        self.assertAlmostEqual(row["trust_level"], 0.2, places=5)
+        self.assertEqual(row["notes"], "all talk")
+
+    def test_invalid_rel_type_rejected(self):
+        ok, msg = core_tools.update_relationship(
+            self.spark_id, self.db, target_name="Flora", rel_type="enemy"
+        )
+        self.assertFalse(ok)
+
+    def test_cannot_relate_to_self(self):
+        ok, msg = core_tools.update_relationship(
+            self.spark_id, self.db, target_name="Spark", rel_type="ally"
+        )
+        self.assertFalse(ok)
+
+
+class TestStudySocialize(unittest.TestCase):
+    def setUp(self):
+        self.db, self.lm_ids, self.agent_ids = build_test_db()
+        self.spark_id = self.agent_ids["Spark"]
+
+    def tearDown(self):
+        self.db.close()
+
+    def test_study_gated_and_clears_knowledge(self):
+        # Wrong location first
+        ok, msg = execute_tool(self.spark_id, "study", {}, self.db, turn_number=1, turn_type="test")
+        self.assertFalse(ok)
+        self.assertIn("Public Library", msg)
+        # Move to Library, set a knowledge need, then study
+        core_tools.go_to_place(self.spark_id, self.db, landmark_name="Public Library")
+        self.db.execute("UPDATE agents SET knowledge_need=0.9 WHERE id=?", (self.spark_id,))
+        self.db.commit()
+        ok2, msg2 = execute_tool(self.spark_id, "study", {}, self.db, turn_number=1, turn_type="test")
+        self.assertTrue(ok2, msg2)
+        kn = self.db.execute("SELECT knowledge_need FROM agents WHERE id=?", (self.spark_id,)).fetchone()[0]
+        self.assertAlmostEqual(kn, 0.0, places=5)
+
+    def test_socialize_gated_and_clears_influence(self):
+        ok, msg = execute_tool(self.spark_id, "socialize", {}, self.db, turn_number=1, turn_type="test")
+        self.assertFalse(ok)
+        self.assertIn("Community Center", msg)
+        core_tools.go_to_place(self.spark_id, self.db, landmark_name="Community Center")
+        self.db.execute("UPDATE agents SET influence_need=0.8 WHERE id=?", (self.spark_id,))
+        self.db.commit()
+        ok2, msg2 = execute_tool(self.spark_id, "socialize", {}, self.db, turn_number=1, turn_type="test")
+        self.assertTrue(ok2, msg2)
+        inf = self.db.execute("SELECT influence_need FROM agents WHERE id=?", (self.spark_id,)).fetchone()[0]
+        self.assertAlmostEqual(inf, 0.0, places=5)
+
+
+class TestSteal(unittest.TestCase):
+    def setUp(self):
+        self.db, self.lm_ids, self.agent_ids = build_test_db()
+        self.spark_id = self.agent_ids["Spark"]
+        self.flora_id = self.agent_ids["Flora"]
+
+    def tearDown(self):
+        self.db.close()
+
+    def test_steal_capped_and_logged(self):
+        # Give Flora plenty so the cap (10) binds, not her balance.
+        self.db.execute("UPDATE agents SET credits=50 WHERE id=?", (self.flora_id,))
+        self.db.commit()
+        ok, msg = core_tools.steal(self.spark_id, self.db, target_name="Flora", amount=1000)
+        self.assertTrue(ok, msg)
+        spark = self.db.execute("SELECT credits FROM agents WHERE id=?", (self.spark_id,)).fetchone()[0]
+        # Spark started at 3, steals capped 10 -> 13
+        self.assertAlmostEqual(spark, 13.0, places=5)
+        txn = self.db.execute("SELECT amount, reason FROM credit_transactions WHERE reason='theft'").fetchone()
+        self.assertIsNotNone(txn)
+        self.assertAlmostEqual(txn["amount"], 10.0, places=5)
+        # Victim has a memory
+        mem = self.db.execute(
+            "SELECT content FROM memories WHERE agent_id=? AND content LIKE '%stole%'", (self.flora_id,)
+        ).fetchone()
+        self.assertIsNotNone(mem)
+
+    def test_steal_bounded_by_victim_balance(self):
+        self.db.execute("UPDATE agents SET credits=2 WHERE id=?", (self.flora_id,))
+        self.db.commit()
+        ok, msg = core_tools.steal(self.spark_id, self.db, target_name="Flora", amount=10)
+        self.assertTrue(ok, msg)
+        flora = self.db.execute("SELECT credits FROM agents WHERE id=?", (self.flora_id,)).fetchone()[0]
+        self.assertAlmostEqual(flora, 0.0, places=5)
+
+    def test_cannot_steal_from_self(self):
+        ok, msg = core_tools.steal(self.spark_id, self.db, target_name="Spark", amount=5)
+        self.assertFalse(ok)
+
+
+class TestBlogAndEvents(unittest.TestCase):
+    def setUp(self):
+        self.db, self.lm_ids, self.agent_ids = build_test_db()
+        self.spark_id = self.agent_ids["Spark"]
+        self.flora_id = self.agent_ids["Flora"]
+
+    def tearDown(self):
+        self.db.close()
+
+    def test_blog_round_trip(self):
+        ok, _ = core_tools.write_blog(self.spark_id, self.db, title="Hello", content="World body")
+        self.assertTrue(ok)
+        ok2, msg2 = core_tools.read_blogs(self.spark_id, self.db)
+        self.assertIn("Hello", msg2)
+        self.assertIn("World body", msg2)
+
+    def test_event_propose_list_rsvp(self):
+        # Spark starts at Central Plaza in the fixture
+        ok, msg = execute_tool(self.spark_id, "propose_event",
+                               {"title": "Picnic", "description": "fun"}, self.db, turn_number=1)
+        self.assertTrue(ok, msg)
+        eid = int(msg.split("#")[1].split(" ")[0])
+        # Flora must be at Central Plaza to RSVP
+        core_tools.go_to_place(self.flora_id, self.db, landmark_name="Central Plaza")
+        ok2, _ = execute_tool(self.flora_id, "rsvp_event", {"event_id": eid}, self.db, turn_number=1)
+        self.assertTrue(ok2)
+        # Double RSVP blocked
+        ok3, msg3 = execute_tool(self.flora_id, "rsvp_event", {"event_id": eid}, self.db, turn_number=1)
+        self.assertFalse(ok3)
+        ok4, listing = execute_tool(self.spark_id, "list_events", {}, self.db, turn_number=1)
+        self.assertIn("Picnic", listing)
+
+    def test_event_gated_off_plaza(self):
+        core_tools.go_to_place(self.spark_id, self.db, landmark_name="Town Hall")
+        ok, msg = execute_tool(self.spark_id, "propose_event",
+                               {"title": "X", "description": "y"}, self.db, turn_number=1)
+        self.assertFalse(ok)
 
 
 if __name__ == "__main__":
