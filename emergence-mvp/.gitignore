@@ -1,0 +1,4 @@
+.env
+sim.db
+__pycache__/
+*.pyc
