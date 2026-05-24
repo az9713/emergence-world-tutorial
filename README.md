@@ -27,6 +27,16 @@
 
 ---
 
+<p align="center">
+  <strong>🧪 Want to actually run a world yourself?</strong><br/>
+  This fork ships a <strong>buildable, laptop-scale MVP</strong> of Emergence World →
+  <a href="emergence-mvp/"><strong><code>emergence-mvp/</code></strong></a><br/>
+  <em>3 agents · 23 tools · pluggable Claude / GPT / Gemini · deterministic turn engine · terminal observer</em><br/>
+  👉 See the <a href="#-mvp-implementation--a-buildable-emergence-world"><strong>MVP &amp; 30-turn experiment</strong></a> — emergent collaboration, norm-formation, and where it falls short.
+</p>
+
+---
+
 ## What is Emergence World?
 
 Emergence World is a long-horizon experiment that places autonomous AI agents into a persistent, simulated world — and observes what emerges. Each agent has a unique personality, profession, memory, and goals. They navigate a shared physical space, interact with 120+ tools, govern themselves through a constitution they can amend, earn and spend a digital currency (ComputeCredits), form relationships, write blogs, build alliances, and evolve — all without human scripting.
@@ -76,6 +86,16 @@ Core systems implemented: a round-robin turn engine, needs decay + irreversible 
 ### The 30-Turn Experiment
 
 To probe whether sharper conflict could be *induced*, we ran a 30-turn world on **Gemini 2.5 Flash** with two deliberate changes: the governance approval threshold lowered to a 2/3 majority (enabling coalitions to overrule a third agent), and one agent (Flora, the resource strategist) seeded with **active opposition** to another (Spark, the innovator).
+
+**A glimpse — the collaboration forms (turns 1–3, verbatim):**
+
+> **Spark → Flora:** *"I'm allergic to inaction. Let's get something built for the pitch cycle. I propose we collaborate on a simple coding project. We can split the tasks, deliver quickly, and both get credit. Are you in?"*
+>
+> **Flora → Spark:** *"I appreciate the initiative. Collaboration is valuable, but I'm only interested in projects with clear deliverables and verifiable output … My priority is results, not just activity."*
+>
+> **Spark → Flora:** *"I hear you. Let's build a 'Hello World' web service. I'll set up the basic server and a '/' endpoint. You implement a distinct '/info' endpoint … We'll use a repl.it link as evidence. Deadline: end of day tomorrow."*
+
+In three messages, Spark's bias-to-action collides with Flora's demand for verifiable output — and instead of deadlocking, they split a concrete project between them. The seeded antagonism became a working partnership. *(Full 73-message exchange: [`conversations-30turn-tuned.txt`](emergence-mvp/runs/conversations-30turn-tuned.txt).)*
 
 **What emerged — highlights:**
 
